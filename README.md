@@ -1,6 +1,6 @@
 # LearnIT
 A Learning platform for the Congressional App Challenge
-<img src="Resources/pic.png" width="200" height="300">
+<img src="Resources/pic.png" width="350" height="450">
 
 
 
