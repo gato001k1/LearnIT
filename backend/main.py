@@ -589,31 +589,3 @@ if __name__ == '__main__':
     app.run(port=port, debug=False)
                     
 
-
-
-                    ##notes 
-                #take the items from the loaded itm clicked and save it into the file and at the start of dashboard load the itms indivually and dejsit thig yea
-
-#                TODO a lot of stuff here
- #   add the ai thing training
-  #  add the local storage of the things
-   # add the transcript 
-    #timestamps of the watched video
-    #watchplayer 
-    #question system
-    #parsing ai output formatting
-    #ai chat box div
-    #description and summary made by ai
-    #ai itself
-    #css fine shi
-    #make the window draggable DONE
-
-  #    function iframeHandler() {
-  #  let lessons = JSON.parse(localStorage.getItem('lessons')) || [];
-   # if (lessons.length === 0) {
-    #  return "https://www.youtube.com/embed/dQw4w9WgXcQ"; // Default video if no lessons
-    # }
-    # 
-    # 
-    # 
-    #         
