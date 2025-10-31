@@ -1,0 +1,16 @@
+diff --git a/node_modules/appdmg/lib/appdmg.js b/node_modules/appdmg/lib/appdmg.js
+index 40d9758..655730b 100644
+--- a/node_modules/appdmg/lib/appdmg.js
++++ b/node_modules/appdmg/lib/appdmg.js
+@@ -393,7 +393,10 @@ module.exports = exports = function (options) {
+   pipeline.addStep('Blessing image', function (next) {
+     var args = []
+     args.push('--folder', global.temporaryMountPath)
+-    args.push('--openfolder', global.temporaryMountPath)
++
++    if (process.arch !== 'arm64') {
++      args.push('--openfolder', global.temporaryMountPath)
++    }
+ 
+     util.sh('bless', args, next)
+   })

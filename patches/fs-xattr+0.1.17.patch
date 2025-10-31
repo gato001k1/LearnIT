@@ -1,0 +1,210 @@
+diff --git a/node_modules/fs-xattr/index.js b/node_modules/fs-xattr/index.js
+index 9937bc2..d2606d2 100644
+--- a/node_modules/fs-xattr/index.js
++++ b/node_modules/fs-xattr/index.js
+@@ -1,5 +1,18 @@
+-var addon = require('./build/Release/xattr')
+ var bufferFrom = require('buffer-from')
++var childProcess = require('child_process')
++
++var addon = null
++try {
++  addon = require('./build/Release/xattr')
++} catch (err) {
++  try {
++    addon = require('./build/Debug/xattr')
++  } catch (errDebug) {
++    addon = null
++  }
++}
++
++var hasNative = addon && typeof addon === 'object'
+ 
+ function defaultCallback (err) {
+   if (err) throw err
+@@ -26,6 +39,83 @@ function validateArgument (key, val) {
+   }
+ }
+ 
++function runXattr (args, cb) {
++  childProcess.execFile('xattr', args, { encoding: 'utf8' }, function (err, stdout) {
++    if (err) return cb(err)
++    cb(null, stdout)
++  })
++}
++
++function runXattrSync (args) {
++  return childProcess.execFileSync('xattr', args, { encoding: 'utf8' })
++}
++
++function bufferToHex (buf) {
++  return Buffer.from(buf).toString('hex')
++}
++
++function hexToBuffer (hex) {
++  return Buffer.from(hex.replace(/\s+/g, ''), 'hex')
++}
++
++function ensureDarwin () {
++  if (process.platform !== 'darwin') {
++    throw new Error('fs-xattr CLI fallback is only supported on macOS')
++  }
++}
++
++var api = hasNative ? addon : {
++  get: function cliGet (path, attr, cb) {
++    ensureDarwin()
++    runXattr(['-px', attr, path], function (err, stdout) {
++      if (err) return cb(err)
++      try {
++        cb(null, hexToBuffer(stdout))
++      } catch (parseErr) {
++        cb(parseErr)
++      }
++    })
++  },
++  set: function cliSet (path, attr, value, cb) {
++    ensureDarwin()
++    runXattr(['-wx', attr, bufferToHex(value), path], function (err) {
++      cb(err || null)
++    })
++  },
++  list: function cliList (path, cb) {
++    ensureDarwin()
++    runXattr([path], function (err, stdout) {
++      if (err) return cb(err)
++      var items = stdout.split('\n').filter(Boolean)
++      cb(null, items)
++    })
++  },
++  remove: function cliRemove (path, attr, cb) {
++    ensureDarwin()
++    runXattr(['-d', attr, path], function (err) {
++      cb(err || null)
++    })
++  },
++  getSync: function cliGetSync (path, attr) {
++    ensureDarwin()
++    var stdout = runXattrSync(['-px', attr, path])
++    return hexToBuffer(stdout)
++  },
++  setSync: function cliSetSync (path, attr, value) {
++    ensureDarwin()
++    runXattrSync(['-wx', attr, bufferToHex(value), path])
++  },
++  listSync: function cliListSync (path) {
++    ensureDarwin()
++    var stdout = runXattrSync([path])
++    return stdout.split('\n').filter(Boolean)
++  },
++  removeSync: function cliRemoveSync (path, attr) {
++    ensureDarwin()
++    runXattrSync(['-d', attr, path])
++  }
++}
++
+ /* Async methods */
+ 
+ exports.get = function get (path, attr, cb) {
+@@ -33,7 +123,7 @@ exports.get = function get (path, attr, cb) {
+   attr = validateArgument('attr', attr)
+   cb = validateArgument('cb', cb)
+ 
+-  addon.get(path, attr, cb)
++  api.get(path, attr, cb)
+ }
+ 
+ exports.set = function set (path, attr, value, cb) {
+@@ -42,14 +132,14 @@ exports.set = function set (path, attr, value, cb) {
+   value = validateArgument('value', value)
+   cb = validateArgument('cb', cb)
+ 
+-  addon.set(path, attr, value, cb)
++  api.set(path, attr, value, cb)
+ }
+ 
+ exports.list = function list (path, cb) {
+   path = validateArgument('path', path)
+   cb = validateArgument('cb', cb)
+ 
+-  addon.list(path, cb)
++  api.list(path, cb)
+ }
+ 
+ exports.remove = function remove (path, attr, cb) {
+@@ -57,7 +147,7 @@ exports.remove = function remove (path, attr, cb) {
+   attr = validateArgument('attr', attr)
+   cb = validateArgument('cb', cb)
+ 
+-  addon.remove(path, attr, cb)
++  api.remove(path, attr, cb)
+ }
+ 
+ /* Sync methods */
+@@ -66,7 +156,7 @@ exports.getSync = function getSync (path, attr) {
+   path = validateArgument('path', path)
+   attr = validateArgument('attr', attr)
+ 
+-  return addon.getSync(path, attr)
++  return api.getSync(path, attr)
+ }
+ 
+ exports.setSync = function setSync (path, attr, value) {
+@@ -74,18 +164,18 @@ exports.setSync = function setSync (path, attr, value) {
+   attr = validateArgument('attr', attr)
+   value = validateArgument('value', value)
+ 
+-  return addon.setSync(path, attr, value)
++  return api.setSync(path, attr, value)
+ }
+ 
+ exports.listSync = function listSync (path) {
+   path = validateArgument('path', path)
+ 
+-  return addon.listSync(path)
++  return api.listSync(path)
+ }
+ 
+ exports.removeSync = function removeSync (path, attr) {
+   path = validateArgument('path', path)
+   attr = validateArgument('attr', attr)
+ 
+-  return addon.removeSync(path, attr)
++  return api.removeSync(path, attr)
+ }
+diff --git a/node_modules/fs-xattr/src/async.cc b/node_modules/fs-xattr/src/async.cc
+index a6fc019..50cd400 100644
+--- a/node_modules/fs-xattr/src/async.cc
++++ b/node_modules/fs-xattr/src/async.cc
+@@ -49,7 +49,7 @@ public:
+     Nan::Utf8String aFilename(filename);
+     Nan::Utf8String aAttribute(attribute);
+ 
+-    v8::Local<v8::Object> bufferObj = value->ToObject();
++    v8::Local<v8::Object> bufferObj = Nan::To<v8::Object>(value).ToLocalChecked();
+ 
+     this->filename = new std::string(*aFilename, aFilename.length());
+     this->attribute = new std::string(*aAttribute, aAttribute.length());
+diff --git a/node_modules/fs-xattr/src/sync.cc b/node_modules/fs-xattr/src/sync.cc
+index 7ddfb9f..75f7bb4 100644
+--- a/node_modules/fs-xattr/src/sync.cc
++++ b/node_modules/fs-xattr/src/sync.cc
+@@ -41,7 +41,8 @@ NAN_METHOD(xattr_get_sync) {
+   }
+ 
+   v8::Local<v8::Object> globalObj = Nan::GetCurrentContext()->Global();
+-  v8::Local<v8::Function> bufferConstructor = v8::Local<v8::Function>::Cast(globalObj->Get(Nan::New("Buffer").ToLocalChecked()));
++  v8::Local<v8::Value> bufferValue = Nan::Get(globalObj, Nan::New("Buffer").ToLocalChecked()).ToLocalChecked();
++  v8::Local<v8::Function> bufferConstructor = v8::Local<v8::Function>::Cast(bufferValue);
+   v8::Local<v8::Value> constructorArgs[3] = { slowBuffer, Nan::New<v8::Integer>((int32_t) valueLen), Nan::New<v8::Integer>(0) };
+   v8::Local<v8::Object> actualBuffer = Nan::NewInstance(bufferConstructor, 3, constructorArgs).ToLocalChecked();
+ 
+@@ -55,7 +56,7 @@ NAN_METHOD(xattr_set_sync) {
+   const char *filename = *aFilename;
+   const char *attribute = *aAttribute;
+ 
+-  v8::Local<v8::Object> bufferObj = info[2]->ToObject();
++  v8::Local<v8::Object> bufferObj = Nan::To<v8::Object>(info[2]).ToLocalChecked();
+   const char *value = node::Buffer::Data(bufferObj);
+   size_t valueLen = node::Buffer::Length(bufferObj);
+ 
