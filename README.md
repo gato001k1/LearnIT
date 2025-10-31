@@ -1,7 +1,7 @@
 # LearnIT
 A Learning platform for the Congressional App Challenge
 
-<img src="missing">
+![Picture](Resources/pic.png)
 
 # This Application was made for the:
 <img src="https://www.congressionalappchallenge.us/wp-content/uploads/2018/08/logo_white.png">
