@@ -22,4 +22,4 @@ Just simply run
 ```
 ./start.sh
 ```
-thats it
+thats it 👍
